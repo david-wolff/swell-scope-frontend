@@ -25,8 +25,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <span className="font-medium">SwellScope</span>
             </Link>
             <nav className="flex gap-4 text-sm">
-              <a href="#home"  className="opacity-80 hover:opacity-100">Home</a>
-              <a href="#waves" className="opacity-50 hover:opacity-100">Ondas</a>
+              <Link href="/" className="opacity-80 hover:opacity-100">Home</Link>
+              <Link href="/waves" className="opacity-50 hover:opacity-100">Ondas</Link>
               <a href="#tides" className="opacity-50 hover:opacity-100">Marés</a>
             </nav>
           </div>
