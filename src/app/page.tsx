@@ -3,6 +3,8 @@ import useSWR from "swr";
 import { api, fetchJSONWithRetry } from "@/lib/api";
 import { Card } from "@/components/Card";
 import { SummaryGrid } from "@/components/SummaryGrid";
+import { TidesMiniChart } from "@/components/TidesMiniChart";
+
 
 export default function HomePage() {
   const { data, error, isLoading, mutate } = useSWR(api("/waves/summary"), fetchJSONWithRetry, {
@@ -27,7 +29,14 @@ export default function HomePage() {
         {error && <div className="text-red-600 dark:text-red-400 text-sm">Erro ao buscar summary.</div>}
         {data && <SummaryGrid summary={data} />}
       </Card>
-
+      <section id="tides" className="space-y-3">
+        <h2 className="text-lg font-medium opacity-80">Marés</h2>
+        <div className="rounded-2xl border border-neutral-200/70 p-4 dark:border-neutral-800">
+          <Card title="Marés hoje" description="Altura (m) e eventos de alta/baixa">
+            <TidesMiniChart />
+          </Card>
+        </div>
+      </section>
       <section id="waves" className="space-y-3">
         <h2 className="text-lg font-medium opacity-80">Ondas (em breve)</h2>
         <div className="rounded-2xl border border-neutral-200/70 p-4 dark:border-neutral-800">
@@ -35,12 +44,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section id="tides" className="space-y-3">
-        <h2 className="text-lg font-medium opacity-80">Marés (em breve)</h2>
-        <div className="rounded-2xl border border-neutral-200/70 p-4 dark:border-neutral-800">
-          Tabela simples de marés — próxima etapa.
-        </div>
-      </section>
+      
     </main>
   );
 }

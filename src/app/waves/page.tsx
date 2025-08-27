@@ -9,13 +9,19 @@ import { Card } from "@/components/Card";
 const pad = (n: number) => String(n).padStart(2, "0");
 
 function toLocalISO(dateStr: string, end = false) {
-  // "YYYY-MM-DD" → "YYYY-MM-DDTHH:mm:ss" (local)
   const [y, m, d] = dateStr.split("-").map(Number);
   const dt = new Date(y, (m ?? 1) - 1, d ?? 1, end ? 23 : 0, end ? 59 : 0, end ? 59 : 0);
-  return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}T${pad(
-    dt.getHours()
-  )}:${pad(dt.getMinutes())}:${pad(dt.getSeconds())}`;
+
+  const offMin = -dt.getTimezoneOffset(); // minutos adiantados vs UTC
+  const sign = offMin >= 0 ? "+" : "-";
+  const abs = Math.abs(offMin);
+  const hh = pad(Math.floor(abs / 60));
+  const mm = pad(abs % 60);
+
+  return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}` +
+         `T${pad(dt.getHours())}:${pad(dt.getMinutes())}:${pad(dt.getSeconds())}${sign}${hh}:${mm}`;
 }
+
 
 function degToCompass16(deg: number) {
   const dirs = ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"] as const;
