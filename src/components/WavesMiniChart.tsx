@@ -1,17 +1,16 @@
 "use client";
 import useSWR from "swr";
 import {
-  Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip,
-  XAxis, YAxis, ReferenceDot, Label,
+  CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 import { api, fetchJSONWithRetry } from "@/lib/api";
 import { CHART } from "@/lib/chartTheme";
 
-type TidePoint = { time: string | number; height: number; type?: string | null };
+type WavePoint = { time: string | number; hs: number | null; tp: number | null };
 
 const pad = (n: number) => String(n).padStart(2, "0");
 const tzOffset = () => {
-  const m = -new Date().getTimezoneOffset(); // local offset vs UTC
+  const m = -new Date().getTimezoneOffset();
   const sign = m >= 0 ? "+" : "-";
   const hh = pad(Math.floor(Math.abs(m) / 60));
   const mm = pad(Math.abs(m) % 60);
@@ -30,61 +29,58 @@ const hhmm = (x: string | number) => {
   const d = toDate(x);
   return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
-const fmtM = (v: number) => `${v.toFixed(2)} m`;
-const tideLabel = (t?: string | null) => {
-  if (!t) return null;
-  const s = t.toString().toLowerCase();
-  if (s.includes("high") || s.includes("alta")) return "Alta";
-  if (s.includes("low") || s.includes("baixa")) return "Baixa";
-  return t;
-};
 
-function TideTooltip({ active, payload, label }: any) {
+function WavesTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
-  const p = payload[0]?.payload as TidePoint;
+  const hs = payload.find((p: any) => p.dataKey === "hs");
+  const tp = payload.find((p: any) => p.dataKey === "tp");
   return (
     <div style={{
       background: CHART.tooltipBg, color: CHART.tooltipText, padding: "8px 10px",
       borderRadius: 8, border: "1px solid #333", fontSize: 12
     }}>
       <div><strong>{hhmm(label)}</strong></div>
-      <div>Altura: <strong>{fmtM(Number(p.height))}</strong></div>
-      {p.type && <div>Extremo: <strong>{tideLabel(p.type)}</strong></div>}
+      {hs && <div style={{ color: CHART.height }}>Altura: <strong>{Number(hs.value).toFixed(2)} m</strong></div>}
+      {tp && <div style={{ color: CHART.period }}>Período: <strong>{Number(tp.value).toFixed(2)} s</strong></div>}
     </div>
   );
 }
 
-export function TidesMiniChart() {
+function LegendInline() {
+  return (
+    <div className="mt-1 mb-2 flex items-center gap-4 text-xs" style={{ color: CHART.axis }}>
+      <span className="inline-flex items-center gap-1">
+        <span style={{ width: 16, height: 2, background: CHART.height, display: "inline-block" }} />
+        Altura (m)
+      </span>
+      <span className="inline-flex items-center gap-1">
+        <span style={{ width: 16, height: 0, borderTop: `2px dashed ${CHART.period}`, display: "inline-block" }} />
+        Período (s)
+      </span>
+    </div>
+  );
+}
+
+export function WavesMiniChart() {
   const start = todayISO(false);
   const end = todayISO(true);
 
-  // NUNCA encodeURIComponent aqui — api() já cuida disso
-  const { data } = useSWR(api(`/tides/?start=${start}&end=${end}`), fetchJSONWithRetry, {
+  const { data } = useSWR(api(`/waves/?start=${start}&end=${end}`), fetchJSONWithRetry, {
     revalidateOnFocus: false,
   });
 
-  // aceita {items:[...]} ou array direto
   const raw: any[] = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : [];
-
-  // normaliza nomes de campos
-  const points: TidePoint[] = raw.map((r) => ({
+  const points: WavePoint[] = raw.map((r) => ({
     time: r.time ?? r.ts ?? r.timestamp ?? r.datetime,
-    height: Number(r.height ?? r.tide ?? r.value ?? 0),
-    type: r.type ?? r.event ?? null,
+    hs: r.hs ?? r.waveHeight ?? null,
+    tp: r.tp ?? r.wavePeriod ?? null,
   }));
-
-  const extremes = points.filter((p) => p.type);
 
   return (
     <div className="w-full h-72">
+      <LegendInline />
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={points} margin={{ top: 16, right: 20, left: 0, bottom: 8 }}>
-          <defs>
-            <linearGradient id="tideArea" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={CHART.areaFrom} />
-              <stop offset="100%" stopColor={CHART.areaTo} />
-            </linearGradient>
-          </defs>
+        <LineChart data={points} margin={{ top: 8, right: 28, left: 4, bottom: 8 }}>
           <CartesianGrid stroke={CHART.grid} strokeDasharray="3 3" />
           <XAxis
             dataKey="time"
@@ -94,40 +90,45 @@ export function TidesMiniChart() {
             tickLine={{ stroke: CHART.grid }}
           />
           <YAxis
+            yAxisId="left"
             tick={{ fill: CHART.axis, fontSize: 12 }}
             axisLine={{ stroke: CHART.grid }}
             tickLine={{ stroke: CHART.grid }}
             width={52}
             tickFormatter={(v) => `${Number(v).toFixed(2)} m`}
           />
-          <Tooltip content={<TideTooltip />} />
-          <Area
+          <YAxis
+            yAxisId="right"
+            orientation="right"
+            tick={{ fill: CHART.axis, fontSize: 12 }}
+            axisLine={{ stroke: CHART.grid }}
+            tickLine={{ stroke: CHART.grid }}
+            width={44}
+            tickFormatter={(v) => `${Number(v).toFixed(1)} s`}
+          />
+          <Tooltip content={<WavesTooltip />} />
+          <Line
+            yAxisId="left"
             type="monotone"
-            dataKey="height"
+            dataKey="hs"
             stroke={CHART.height}
             strokeWidth={2.4}
-            fill="url(#tideArea)"
+            dot={false}
             activeDot={{ r: 4 }}
             connectNulls
           />
-          {extremes.map((e, i) => (
-            <ReferenceDot
-              key={i}
-              x={e.time as any}
-              y={e.height as number}
-              r={4.5}
-              stroke={CHART.axis}
-              fill={CHART.height}
-            >
-              <Label
-                value={tideLabel(e.type) ?? ""}
-                position="top"
-                fill={CHART.axis}
-                fontSize={12}
-              />
-            </ReferenceDot>
-          ))}
-        </AreaChart>
+          <Line
+            yAxisId="right"
+            type="monotone"
+            dataKey="tp"
+            stroke={CHART.period}
+            strokeWidth={2.2}
+            strokeDasharray="6 6"
+            dot={false}
+            activeDot={{ r: 3 }}
+            connectNulls
+          />
+        </LineChart>
       </ResponsiveContainer>
     </div>
   );
