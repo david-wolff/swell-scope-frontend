@@ -1,14 +1,10 @@
 export const api = (path: string) => `/api/proxy?path=${encodeURIComponent(path)}`;
-
-const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
-export async function fetchJSONWithRetry(url: string, init?: RequestInit) {
-  let err: unknown;
-  for (let i = 0; i < 5; i++) {
-    try {
-      const res = await fetch(url, { ...init, cache: "no-store" });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return await res.json();
-    } catch (e) { err = e; await sleep(600 * 2 ** i); }
+export async function fetchJSONWithRetry(input: string, init?: RequestInit, retries = 1) {
+  for (let i = 0; i <= retries; i++) {
+    const res = await fetch(input, { ...init, cache: "no-store" });
+    if (res.ok) return res.json();
+    if (i === retries) throw new Error(`HTTP ${res.status}`);
+    await new Promise(r => setTimeout(r, 400 * (i + 1)));
   }
-  throw err ?? new Error("network error");
+  throw new Error("unreachable");
 }

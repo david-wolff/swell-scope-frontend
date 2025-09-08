@@ -1,28 +1,56 @@
-import { NextResponse } from "next/server";
+// Rota proxy para o backend no Render
+export const runtime = "nodejs";
 
-const BASE = (process.env.NEXT_PUBLIC_API_BASE_URL || "").replace(/\/$/, "");
+function getBaseUrl() {
+  return (
+    process.env.BACKEND_URL ||
+    process.env.NEXT_PUBLIC_BACKEND_URL ||
+    "http://localhost:8000"
+  );
+}
 
-async function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)); }
+function buildTargetUrl(rawPath: string): string {
+  const once = decodeURIComponent(rawPath); // decodifica UMA vez
+  let pathWithQuery = once;
+
+  if (/^https?:\/\//i.test(once)) {
+    const u = new URL(once);
+    pathWithQuery = `${u.pathname}${u.search}`;
+  }
+
+  const safe = pathWithQuery.startsWith("/") ? pathWithQuery : `/${pathWithQuery}`;
+  const base = getBaseUrl();
+  return new URL(safe, base).toString();
+}
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
-  const path = searchParams.get("path") || "/";
-  const url = `${BASE}${path.startsWith("/") ? path : `/${path}`}`;
+  const raw = searchParams.get("path") || "/health";
 
-  // retry/backoff para quando o Render estiver “acordando”
-  let lastErr: unknown;
-  for (let i = 0; i < 5; i++) {
-    try {
-      const res = await fetch(url, { cache: "no-store" });
-      const text = await res.text();
-      return new NextResponse(text, {
-        status: res.status,
-        headers: { "content-type": res.headers.get("content-type") || "application/json" },
-      });
-    } catch (e) {
-      lastErr = e;
-      await sleep(600 * 2 ** i);
-    }
+  try {
+    const target = buildTargetUrl(raw);
+    const res = await fetch(target, {
+      cache: "no-store",
+      headers: { accept: "application/json, text/plain;q=0.9, */*;q=0.8" },
+      signal: AbortSignal.timeout?.(8000),
+    });
+
+    const body = await res.text();
+    const headers = new Headers({
+      "content-type": res.headers.get("content-type") || "application/json",
+    });
+    return new Response(body, { status: res.status, headers });
+  } catch (err: any) {
+    return Response.json(
+      {
+        ok: false,
+        error: "proxy_error",
+        detail: String(err?.message || err),
+        base: getBaseUrl(),
+        got: raw,
+        target: (() => { try { return buildTargetUrl(raw); } catch { return null; } })(),
+      },
+      { status: 502 }
+    );
   }
-  return NextResponse.json({ error: "upstream unreachable", detail: String(lastErr) }, { status: 502 });
 }
